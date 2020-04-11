@@ -1,0 +1,201 @@
+body
+{
+    margin: 0;
+    padding: 0;
+    background-color: #ececec;
+    font-family: sans-serif;
+}
+#content
+{
+    height: 100vh;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-content: start;
+}
+#main-header
+{
+    width: 100%;
+    height: 65px;
+    display: flex;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 20px;
+    padding-left: 320px;
+}
+#left-panel
+{
+    display: flex;
+    flex-flow: column;
+    width: 300px;
+    height: calc(100vh - 65px);
+    box-sizing: border-box;
+    overflow: hidden;
+    padding-top: 20px;
+}
+#main-content
+{
+    flex-grow: 1;
+    height: calc(100vh - 65px);
+    box-sizing: content-box;
+    overflow: hidden;
+}
+.menu-button
+{
+    padding: 0 8px 4px;
+    margin-top: 8px;
+    margin-right: 30px;
+    cursor: pointer;
+    box-sizing: border-box;
+    border-bottom: 1px solid grey;
+}
+.menu-button:last-child
+{
+    margin-right: 0;
+}
+.menu-button:hover
+{
+    border-bottom: 3px solid grey;
+}
+#searcht-tab
+{
+    background-color: white;
+}
+#searcht-tab:hover, #language-select:hover
+{
+    border-bottom: 1px solid grey;
+}
+#search-input
+{
+    border: none;
+    background-color: transparent;
+}
+.display-div
+{
+    background-color: white;
+    height: 100%;
+    overflow: auto;
+}
+.svg-icon
+{
+    width: 15px;
+    vertical-align: middle;
+}
+#language-select
+{
+    position: relative;
+    margin-right: 80px;
+}
+#language-select .open
+{
+    display: none;
+    position: absolute;
+    left: -10px;
+    background-color: #ececec;
+    margin-top: 5px;
+}
+#language-select .open ul
+{
+    padding: 4px;
+    margin-bottom: 0;
+    margin-top: 12px;
+}
+#language-select .open ul li
+{
+    padding: 0 10px;
+}
+#language-select .open ul li:hover
+{
+    background-color: #bfbaba;
+}
+.flex-space
+{
+    flex-grow: 10;
+}
+#page-name
+{
+    display: none;
+    width: 100%;
+}
+.move-buttons
+{
+    display: flex;
+    justify-content: center;
+}
+.move-buttons div
+{
+    padding: 8px;
+    background-color: white;
+    font-size: 18px;
+    border-bottom: 1px solid black;
+    cursor: pointer;
+}
+.move-buttons div:hover
+{
+    padding-bottom: 6px;
+    border-bottom: 3px solid black;
+}
+.move-buttons div:first-child
+{
+    margin-right: 25px;
+}
+#main-navigation
+{
+    text-align: left;
+    overflow: auto;
+    scrollbar-width: thin;
+}
+#main-navigation > ul
+{
+    height: inherit;
+}
+ul
+{
+    list-style: none;
+    padding-left: 20px;
+}
+ul li span
+{
+    cursor: pointer;
+}
+ul li span:hover
+{
+    text-decoration: underline;
+}
+ul li span.highlited
+{
+    font-weight: bold;
+}
+
+#epub-display
+{
+    width: 100%;
+    background: white;
+    border: 0;
+    box-sizing: border-box;
+    padding: 0;
+    height: 100%;
+    overflow: scroll;
+}
+#search-div
+{
+    height: 100%;
+    background-color: white;
+    overflow: auto;
+}
+#file-upload-div
+{
+    flex-wrap: wrap;
+    align-content: start;
+    padding: 50px;
+    box-sizing: content-box;
+}
+[data-display='none']
+{
+    display: none;
+}
+[data-display='flex']
+{
+    display: flex;
+}
