@@ -18,6 +18,11 @@ window.readed_page;
 window.page_hash;
 window.epub_settings;
 
+if (!window.indexedDB)
+{
+    window.alert("Je nám líto, váš prohlížeč nepodporuje stabilní verzi IndexDB, kterou tato aplikace vyžaduje.");
+}
+
 window.addEventListener('load', () =>
 {
     Load_application();
@@ -70,6 +75,11 @@ window.addEventListener('load', () =>
     {
         Display_tab('settings-div');
     });
+});
+
+window.addEventListener('popstate', function (event)
+{
+    Change_page(event.state.page, "", true, event.state.file);
 });
 
 /**
@@ -199,12 +209,12 @@ function Load_application()
 }
 
 /**
- * Function used to check and eventually actualize databases for secondary EPUB files. Is not used for main EPUB.
+ * Function used to check and eventually initialize actualizatin of database for secondary EPUB files.
+ * Is not used for the main EPUB file.
  *
- * @param {boolean} db_existed
- * @param {string} db_name
- * @returns {Promise<unknown>}
- * @constructor
+ * @param {boolean} db_existed - Information, wheter the DB already existed (EPUB was already loaded in the past) or is newly created.
+ * @param {string} db_name - The name of the database, which should be checked.
+ * @returns {Promise<void>} - Empty Promise.
  */
 function Renew_DB_content(db_existed, db_name)
 {
@@ -261,6 +271,13 @@ function Renew_DB_content(db_existed, db_name)
     });
 }
 
+/**
+ * Loads and extract an EPUB file.
+ *
+ * @param {string} [epub_file] - The name of the processed EPUB file. Set to main EPUB file name by default.
+ * @param {boolean} [add_listeners] - Wheter to add event listeners after processing, used for the main EPUB file.
+ * @returns {Promise<void>} - Empty Promise.
+ */
 function Process_epub(epub_file = "", add_listeners = true)
 {
     return new Promise((resolve, reject) =>
@@ -323,11 +340,13 @@ function Process_epub(epub_file = "", add_listeners = true)
     });
 }
 
-window.addEventListener('popstate', function (event)
-{
-    Change_page(event.state.page, "", true, event.state.file);
-});
-
+/**
+ * Calls Save_files_from_zip() all files in EPUB and then calls Load_UI(), if processed zip was the main EPUB.
+ *
+ * @param zip - Extracted zip (EPUB) data.
+ * @param {string} db_name - The name of the database, which should be checked.  Set to main EPUB file name by default.
+ * @returns {Promise<void>} - Empty Promise.
+ */
 async function Process_inner_files(zip, db_name = "")
 {
     console.log("process inner db_name", db_name);
@@ -358,7 +377,7 @@ async function Process_inner_files(zip, db_name = "")
         })
         .then(function (rootfile)
         {
-            if (db_name == "" || db_name == window.db_name)  // Only if processed file is main loaded EPUB.
+            if (db_name == "" || db_name == window.db_name)  // Only if processed file is the main EPUB.
             {
                 console.log("asdasdasdasdasdasdasdasdads");
                 Load_UI(rootfile);
@@ -366,6 +385,13 @@ async function Process_inner_files(zip, db_name = "")
         });
 }
 
+/**
+ * Saves all extracted files from EPUB to database. Determines the form of saved data based on file extension.
+ *
+ * @param zip - Extracted zip (EPUB) data.
+ * @param {string} db_name - The name of the database, which should be checked.  Set to main EPUB file name by default.
+ * @returns {Promise<void>} - Empty Promise.
+ */
 async function Save_files_from_zip(zip, db_name = "")
 {
     async function Load_file_content(file, type)
@@ -396,9 +422,11 @@ async function Save_files_from_zip(zip, db_name = "")
     }
 }
 
+/**
+ *  Add event listeners related to the loaded EPUB file, for example to the next and previou control buttons.
+ */
 function Add_listeners()
 {
-    console.log("Add_listenersaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     document.getElementById("next").addEventListener("click", () =>
     {
         let loaded_page = document.getElementById("page-name");
@@ -501,6 +529,12 @@ function Add_listeners()
     });
 }
 
+/**
+ * Load user interface of application based on main EPUB data.
+ *
+ * @param {string} rootfile - Rootfile name of the main EPUB file.
+ * @returns {Promise<void>} - Empty Promise.
+ */
 function Load_UI(rootfile)
 {
     return new Promise(() =>
@@ -605,11 +639,16 @@ function Load_UI(rootfile)
             {
                 Finalize_load_UI(rootfile_content, xml_doc);
             }
-
         });
     });
 }
 
+/**
+ * Finalizes loadin of user interface, then calls Load_side_menu().
+ *
+ * @param {JSON} rootfile_content - Rootfile loaded with Read_from_DB() function.
+ * @param {Document} xml_doc - Parsed rootfile content.
+ */
 function Finalize_load_UI(rootfile_content, xml_doc)
 {
     if (readed_page == null)
@@ -657,6 +696,11 @@ function Finalize_load_UI(rootfile_content, xml_doc)
     }
 }
 
+/**
+ * Load side menu based on data of the main EPUB file.
+ *
+ * @param {Object} rootfile_content - Rootfile loaded with Read_from_DB() function.
+ */
 function Load_side_menu(rootfile_data)
 {
     let parser = new DOMParser();
@@ -824,6 +868,13 @@ function Load_side_menu(rootfile_data)
     }
 }
 
+/**
+ * Recursive function for generation of one level of navigation.
+ *
+ * @param {Element} navigation - UL element from which should be navigation generateg.
+ * @param {string} epub_file - Name of EPUB file the navigation is generated for.
+ * @returns {[]} - Array of navigation elements.
+ */
 function Generate_submenu(navigation, epub_file)
 {
     let generated_children = [];
@@ -844,7 +895,8 @@ function Generate_submenu(navigation, epub_file)
             {
                 span.addEventListener('click', () =>
                 {
-                    Change_page(li.children[0].getAttribute("href"), "cur_posittion", false, epub_file);
+                    Change_page(li.children[0].getAttribute("href"), "cur_posittion",
+                        false, epub_file);
                 });
                 span.classList.add('nav-link');
                 span.setAttribute('data-href', li.children[0].getAttribute("href"));
@@ -857,11 +909,11 @@ function Generate_submenu(navigation, epub_file)
             summary.appendChild(span);
             details.appendChild(summary);
 
-            let ol = document.createElement('ul');
-            let details_el = Generate_submenu(li.children[1].children, epub_file);
-            ol.append(...details_el);
+            let ul = document.createElement('ul');
+            let details_ul = Generate_submenu(li.children[1].children, epub_file);
+            ul.append(...details_ul);
 
-            details.appendChild(ol);
+            details.appendChild(ul);
 
             generated_li.appendChild(details);
         }
@@ -890,6 +942,14 @@ function Generate_submenu(navigation, epub_file)
     return generated_children;
 }
 
+/**
+ * Change displayed document in iframe. Also handles history records.
+ *
+ * @param {string} new_page - Name of the new documet.
+ * @param {string} doc_path - Path related to the document.
+ * @param {boolean} from_history - Shether the change was iniciated by popstate event (if true, history is not affected).
+ * @param {string} new_file - The name of the database from which should be readed. Set to main EPUB file name by default.
+ */
 function Change_page(new_page, doc_path = "cur_posittion", from_history = false, new_file = "")
 {
     let pom;
@@ -1000,12 +1060,17 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
             Adjust_content(result.file_content).then((result) =>
             {
                 document.querySelector('#epub-display').srcdoc = result;
-                Display_tab('epub-display');
+                Display_tab('epub-display');    // Ensure that iframe is displayed.
             })
         }
     });
 }
 
+/**
+ * Highlight path to the displayed document in navigation.
+ *
+ * @param {Element} menu_link - Element to highlite.
+ */
 function Highlight_menu_path(menu_link)
 {
     if (menu_link != null)
@@ -1022,9 +1087,15 @@ function Highlight_menu_path(menu_link)
     }
 }
 
+/**
+ * Function for adjusting HTML document. Transforms links based on their type (mainly to Base64) and evaluates
+ * users settings.
+ *
+ * @param {string} html - HTML document to adjust.
+ * @returns {Promise<string>} - Adjustit HTML document.
+ */
 function Adjust_content(html)
 {
-
     return new Promise(async (resolve, reject) =>
     {
         var parser = new DOMParser();
@@ -1083,7 +1154,6 @@ function Adjust_content(html)
                 {
                     cur_el.setAttribute("src", `data:image/*;base64,${result.file_content}`);
                 });
-
             }
         }
 
@@ -1179,14 +1249,14 @@ function Adjust_content(html)
 
         xml_doc.querySelector('head').appendChild(higl_style_link); // Add link to highlight style.
 
-
         var oSerializer = new XMLSerializer();
         resolve(oSerializer.serializeToString(xml_doc));
     });
-
-
 }
 
+/**
+ * Initiate search of a new expression and write results.
+ */
 function Find_and_write_search_results()
 {
     let expression = document.getElementById('search-input').value;
@@ -1225,6 +1295,12 @@ function Find_and_write_search_results()
     });
 }
 
+/**
+ * Find searched expression in all documents.
+ *
+ * @param {string} expression - Searched expression.
+ * @returns {Promise<[]>} - Array of objects with results generated by Generate_search_result().
+ */
 async function Search_expression(expression)
 {
     return new Promise(async (resolve, reject) =>
@@ -1369,24 +1445,30 @@ async function Search_expression(expression)
     });
 }
 
-function Generate_search_result(key, priority, xmlDoc, file, ns_resolve)
+/**
+ *  Process search result into object.
+ *
+ * @param {string} key - Name of find document.
+ * @param {number} priority - Priority of search.
+ * @param {Document} xml_doc - Parsed document content.
+ * @param {string} file - Name of EPUB file the find document belongs to.
+ * @param {XPathNSResolver} ns_resolve - Resolver of namespaces for xml_doc.
+ * @returns {Object} - Generated search result.
+ */
+function Generate_search_result(key, priority, xml_doc, file, ns_resolve)
 {
-    let title = xmlDoc.evaluate('//h:title/text()', xmlDoc, ns_resolve, XPathResult.STRING_TYPE,
+    let title = xml_doc.evaluate('//h:title/text()', xml_doc, ns_resolve, XPathResult.STRING_TYPE,
         null).stringValue;
-    let desc = xmlDoc.evaluate('//h:meta[@name="description"]/@content', xmlDoc, ns_resolve,
+    let desc = xml_doc.evaluate('//h:meta[@name="description"]/@content', xml_doc, ns_resolve,
         XPathResult.STRING_TYPE, null).stringValue;
     return {"key": key, "priority": priority, "title": title, "description": desc, "file": file};
 }
 
-if (!window.indexedDB)
-{
-    window.alert("Je nám líto, váš prohlížeč nepodporuje stabilní verzi IndexDB, kterou tato aplikace vyžaduje.");
-}
-
 /**
+ * Open indexedDB database with specified name or create a new one if does not exists.
  *
- * @returns {Promise<boolean>}
- * @constructor
+ * @param {string} [db_name] - The name of the database.
+ * @returns {Promise<boolean>} - Returns true, if database existed, false if it was newly created.
  */
 function Open_DB(db_name = "")
 {
@@ -1431,11 +1513,24 @@ function Open_DB(db_name = "")
     });
 }
 
+/**
+ * Convert name and content of a file to JSON and save it to database.
+ *
+ * @param {string} file_name - Name of saved file.
+ * @param file_content - Content to save.
+ * @param {string} [db_name] - The name of the database in which should be the file saved.
+ */
 function Save_file_to_DB(file_name, file_content, db_name = '')
 {
     Save_to_DB({"file_name": file_name, "file_content": file_content}, db_name);
 }
 
+/**
+ * Save object to database.
+ *
+ * @param data - Data to save.
+ * @param {string} [db_name] - The name of the database in which should be the file saved. Set to main EPUB file name by default.
+ */
 function Save_to_DB(data, db_name = '')
 {
     if (db_name == "")
@@ -1455,6 +1550,13 @@ function Save_to_DB(data, db_name = '')
     }
 }
 
+/**
+ * Read data from database.
+ *
+ * @param key - Key of readed database record.
+ * @param {string} db_name - The name of the database from which should be readed. Set to main EPUB file name by default.
+ * @returns {Promise<JSON>} - Data loaded drom database, null on failure.
+ */
 function Read_from_DB(key, db_name = "")
 {
     return new Promise(async (resolve, reject) =>
@@ -1486,7 +1588,9 @@ function Read_from_DB(key, db_name = "")
 }
 
 /**
- * Deletes all data from currently used database.
+ * Deletes all data from database.
+ *
+ * @param {string} db_name - The name of the database, which should be cleared. Set to main EPUB file name by default.
  */
 function Clear_data_from_DB(db_name = "")
 {
@@ -1507,7 +1611,7 @@ function Clear_data_from_DB(db_name = "")
 /**
  * Converts file to Base64 string.
  *
- * @param file - File to convert.
+ * @param {File} file - File to convert.
  * @returns {Promise<string>} - Base64 string.
  */
 function Get_base64(file)
@@ -1523,7 +1627,11 @@ function Get_base64(file)
     });
 }
 
-
+/**
+ * Generates settings tab.
+ *
+ * @param {JSON} json_schema - File content loaded with Read_from_DB().
+ */
 function Generate_settings_page(json_schema)
 {
     let properties = JSON.parse(json_schema.file_content).properties;
@@ -1587,6 +1695,9 @@ function Generate_settings_page(json_schema)
     settings_page.appendChild(submit_div);
 }
 
+/**
+ * Generate abd save user settings.
+ */
 function Genrate_settings()
 {
     let inputs = document.querySelectorAll('#settings-div div div [name]');
@@ -1613,6 +1724,11 @@ function Genrate_settings()
     Save_file_to_DB('USER_SETTINGS', JSON.stringify(setting));
 }
 
+/**
+ * Switches curently displayed tab.
+ *
+ * @param name - ID of the new tab which should be displayed.
+ */
 function Display_tab(name)
 {
     let active_tab = document.querySelector('[data-display="flex"]');
