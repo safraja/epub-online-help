@@ -18,6 +18,8 @@ window.readed_page;
 window.page_hash;
 window.epub_settings;
 
+console.log("asdasasdasdasdasdasdadsdsa")
+
 if (!window.indexedDB)
 {
     window.alert("Je nám líto, váš prohlížeč nepodporuje stabilní verzi IndexDB, kterou tato aplikace vyžaduje.");
@@ -53,7 +55,7 @@ window.addEventListener('load', () =>
     document.getElementById('confirm-file-addres-load').addEventListener('click', (event) =>
     {
         let file_addres = document.getElementById('file-addres-input').value;
-
+        console.log("asdasasdasdasdasdasdadsdsa")
         if (file_addres != "")
         {
             history.replaceState({"page": null}, null, `?file=${file_addres}`);
@@ -89,7 +91,7 @@ window.addEventListener('popstate', function (event)
 function Load_application()
 {
     const url_params = new URL(location.href).searchParams;
-
+    console.log("asdasasdasdasdasdasdadsdsa")
     epub_file = url_params.get('file');
     secondary_epub_files = url_params.get('secondary_files');
     readed_page = url_params.get('readed_page');
@@ -244,11 +246,13 @@ function Renew_DB_content(db_existed, db_name)
                             Process_epub(db_name, false).then(() =>
                             {
                                 console.log("Renew_DB_content5 :", this);
+
                                 resolve();
                             });
                         }
                         else
                         {
+
                             resolve();
                         }
                     }
@@ -265,6 +269,7 @@ function Renew_DB_content(db_existed, db_name)
                 resolve();
                 console.log("Renew_DB_content 77777777777777777777777777777777777 :", db_name);
             });
+            await Add_files_to_cache(db_name);
             resolve();
             console.log("Renew_DB_content asdasdsssssss :", db_name);
         }
@@ -280,6 +285,7 @@ function Renew_DB_content(db_existed, db_name)
  */
 function Process_epub(epub_file = "", add_listeners = true)
 {
+    console.log("asdasasdasdasdasdasdadsdsa")
     return new Promise((resolve, reject) =>
     {
         if (epub_file == "")
@@ -374,6 +380,7 @@ async function Process_inner_files(zip, db_name = "")
                 await Save_files_from_zip(zip, db_name);
                 resolve(rootfile);
             });
+            console.log("asdasasdasdasdasdasdadsdsa")
         })
         .then(function (rootfile)
         {
@@ -1309,34 +1316,119 @@ async function Search_expression(expression)
 
         let search_results = [];
 
+        let stop_words;
+
+        let Load_stop_words = function ()
+        {
+            return new Promise(async (resolve) =>
+            {
+                let http_req = new XMLHttpRequest();
+                http_req.overrideMimeType("application/json");
+                http_req.open('GET', 'stop_words.json', true);
+                http_req.onreadystatechange = await function ()
+                {
+                    if (this.readyState == this.DONE && this.status == "200")
+                    {
+                        stop_words = this.responseText;
+                        resolve();
+                    }
+                };
+                http_req.send(null);
+            });
+        }
+
+        await Load_stop_words();
+
+        let orig_expression = expression;
+
+        // Remove stop words from expression.
+        for (let lang of stop_words)
+        {
+            for (let i = 0; i < lang.length; i++)
+            {
+                expression = expression.replace(` ${lang[i]} `, '');
+
+                if (expression.startsWith(`${lang[i]} `))
+                {
+                    expression = expression.substring(`${lang[i]} `.length, expression.length);
+                }
+
+                if (expression.endsWith(` ${lang[i]}`))
+                {
+                    expression = expression.substring(0, expression.lastIndexOf(` ${lang[i]}`));
+                }
+            }
+        }
+
+        if (expression == "")
+        {
+            expression = orig_expression;   // If the expression was cleared completely, use he original one.
+        }
+
+        expression = expression.toLowerCase();
+        expression = expression.replace(/\s\s+/g, ' ').trim();  //Remove multiple, initial and trailing spaces.
+        let dictionary = {
+            "á": "a", "ä": "a", "č": "c", "ď": "d", "é": "e", "ě": "e", "ë": "e", "í": "i", "ï": "i", "ľ": "l",
+            "ĺ": "l", "ň": "n", "ń": "n", "ó": "o", "ö": "o", "ř": "r", "ŕ": "r", "š": "s", "ś": "s", "ť": "t",
+            "ú": "u", "ů": "u", "ü": "u", "ý": "y", "ÿ": "y", "ž": "z", "ź": "z"
+        };
+
+        expression = expression.strtr(dictionary);
+
+        console.log("expression", expression)
+        let words_to_search = expression.split(' ');
+        console.log("words_to_search", words_to_search);
+
         async function Search_in_document(key, db_name)
         {
             await Read_from_DB(key, db_name).then((result) =>
             {
                 let parser = new DOMParser();
-                let xml_doc = parser.parseFromString(result.file_content, "text/xml");
+                let translated_doc = result.file_content.toLowerCase();
+                translated_doc = translated_doc.strtr(dictionary);
 
-                let keywords = xml_doc.evaluate('//h:meta[@name="keywords"]/@content', xml_doc, ns_resolve,
-                    XPathResult.STRING_TYPE, null).stringValue;
+                let xml_doc = parser.parseFromString(translated_doc, "text/xml");
 
-                if (keywords.search(RegExp(expression, 'i')) > -1)
+                let keywords = xml_doc.evaluate('//h:meta[@name="keywords"]/@content', xml_doc,
+                    ns_resolve, XPathResult.STRING_TYPE, null).stringValue;
+
+                let found_priority = false;
+
+                for (let i = 0; i < words_to_search.length; i++)
                 {
-                    search_results.push(Generate_search_result(key, 1, xml_doc, db_name, ns_resolve));
-                    return;
+                    if (keywords.search(RegExp(words_to_search[i], 'i')) > -1)
+                    {
+                        found_priority = 1;
+                        console.log("found_priority", 1)
+                        break;
+                    }
+
+                    if ((found_priority === false || found_priority > 2) &&
+                        (xml_doc.evaluate(`count(//h:h1[contains(text(),'${words_to_search[i]}')]|` +
+                            `//h:h2[contains(text(),'${words_to_search[i]}')]|` +
+                            `//h:h3[contains(text(),'${words_to_search[i]}')]|` +
+                            `//h:h4[contains(text(),'${words_to_search[i]}')]|` +
+                            `//h:h5[contains(text(),'${words_to_search[i]}')]|` +
+                            `//h:h6[contains(text(),'${words_to_search[i]}')])`,
+                            xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
+                    {
+                        console.log("found_priority", 2)
+                        found_priority = 2;
+                    }
+
+                    if ((found_priority === false) &&
+                        (xml_doc.evaluate(`count(//*[contains(text(),'${words_to_search[i]}')])`,
+                            xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
+                    {
+                        console.log("found_priority", 3)
+                        found_priority = 3;
+                    }
                 }
 
-                if (xml_doc.evaluate(`count(//h1[contains(text(),'${expression}')]|` +
-                    `//h2[contains(text(),'${expression}')]|//h3[contains(text(),'${expression}')])`,
-                    xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0)
+                if (typeof found_priority !== "boolean")
                 {
-                    search_results.push(Generate_search_result(key, 2, xml_doc, db_name, ns_resolve));
-                    return;
-                }
-
-                if (xml_doc.evaluate(`count(//*[contains(text(),'${expression}')])`,
-                    xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0)
-                {
-                    search_results.push(Generate_search_result(key, 3, xml_doc, db_name, ns_resolve));
+                    search_results.push(Generate_search_result(key, found_priority, xml_doc,
+                        db_name, ns_resolve));
                     return;
                 }
             });
@@ -1753,3 +1845,31 @@ function Display_tab(name)
         document.getElementById(name).setAttribute('data-display', 'flex');
     }
 }
+
+/**
+ * strtr() for JavaScript
+ * Translate characters or replace substrings
+ *
+ * @author Dmitry Sheiko
+ * @version strtr.js, v 1.0.1
+ * @license MIT
+ * @copyright (c) Dmitry Sheiko http://dsheiko.com
+ **/
+String.prototype.strtr = function (dic)
+{
+    const str = this.toString(),
+        makeToken = (inx) => `{{###~${inx}~###}}`,
+
+        tokens = Object.keys(dic)
+            .map((key, inx) => ({
+                key,
+                val: dic[key],
+                token: makeToken(inx)
+            })),
+
+        tokenizedStr = tokens.reduce((carry, entry) =>
+            carry.replace(entry.key, entry.token), str);
+
+    return tokens.reduce((carry, entry) =>
+        carry.replace(entry.token, entry.val), tokenizedStr);
+};
