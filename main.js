@@ -73,6 +73,11 @@ window.addEventListener('load', () =>
         Display_tab('epub-display');
     });
 
+    document.getElementById('index-tab').addEventListener('click', (event) =>
+    {
+        Display_tab('epub-display');
+    });
+
     document.getElementById('settings-tab').addEventListener('click', (event) =>
     {
         Display_tab('settings-div');
@@ -665,6 +670,21 @@ function Finalize_load_UI(rootfile_content, xml_doc)
         document.getElementById("page-name").textContent =
             `${sessionStorage.getItem("rootfile_dir")}${first_page_href}`;
 
+        let element;
+        element = xml_doc.querySelector('item[properties="contact"]');
+        let href_contact = element.getAttribute('href');
+        document.getElementById('contact-tab').addEventListener('click', () =>
+        {
+            Change_page(href_contact, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
+        });
+
+        element = xml_doc.querySelector('item[properties="index"]');
+        let href_index = element.getAttribute('href');
+        document.getElementById('index-tab').addEventListener('click', () =>
+        {
+            Change_page(href_index, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
+        });
+
         Read_from_DB(`${sessionStorage.getItem("rootfile_dir")}${first_page_href}`)
             .then((result) =>
             {
@@ -864,13 +884,6 @@ function Load_side_menu(rootfile_data)
                 menu_span.classList.remove('highlited');
             }
             Highlight_menu_path(document.querySelector(selector));
-        });
-
-        element = xml_doc.querySelector('item[properties="contact"]');
-        href = element.getAttribute('href');
-        document.getElementById('contact-tab').addEventListener('click', () =>
-        {
-            Change_page(href, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
         });
     }
 }
@@ -1399,7 +1412,6 @@ async function Search_expression(expression)
                     if (keywords.search(RegExp(words_to_search[i], 'i')) > -1)
                     {
                         found_priority = 1;
-                        console.log("found_priority", 1)
                         break;
                     }
 
@@ -1412,7 +1424,6 @@ async function Search_expression(expression)
                             `//h:h6[contains(text(),'${words_to_search[i]}')])`,
                             xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
                     {
-                        console.log("found_priority", 2)
                         found_priority = 2;
                     }
 
@@ -1420,7 +1431,6 @@ async function Search_expression(expression)
                         (xml_doc.evaluate(`count(//*[contains(text(),'${words_to_search[i]}')])`,
                             xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
                     {
-                        console.log("found_priority", 3)
                         found_priority = 3;
                     }
                 }
