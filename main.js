@@ -16,7 +16,7 @@ window.epub_file;
 window.secondary_epub_files = [];
 window.readed_page;
 window.page_hash;
-window.epub_settings;
+window.epub_settings = {};
 
 console.log("asdasasdasdasdasdasdadsdsa")
 
@@ -633,17 +633,6 @@ function Load_UI(rootfile)
                     .then((result) =>
                     {
                         Generate_settings_page(result);
-                        let settings = {};
-
-                        let properties = JSON.parse(result.file_content).properties;
-
-                        Object.keys(properties).forEach((key) =>
-                        {
-                            settings[key] = properties[key]['default'];
-                        });
-
-                        window.epub_settings = settings;
-
                         Finalize_load_UI(rootfile_content, xml_doc);
                     });
             }
@@ -1225,42 +1214,25 @@ function Adjust_content(html)
             }
         }
 
-        let ifs = xml_doc.querySelectorAll(`[epub-if]`);
-
-        for (let element of ifs)
+        if(window.epub_settings !== undefined)
         {
-            let condition = element.getAttribute('epub-if');
-            if (condition.search('==') === -1) // If there is only variable.
+            let conditions = Object.keys(window.epub_settings);
+            for(let condition of conditions)
             {
-                if (window.epub_settings[condition] === false)
-                {
-                    element.style.display = 'none';
-                }
-                element.removeAttribute('epub-if');
-            }
-            else
-            {
-                condition = condition.replace('===', '==');
-                let parts = condition.split('==');
-                let pom;
+                let elements = xml_doc.querySelectorAll(`[data-${condition}]`);
 
-                if (parts[0].search(/'|"|`/) == -1)  // If parts[0] is a variable.
+                for (let element of elements)
                 {
-                    pom = (window.epub_settings[parts[0]] == parts[1].replace(/'|"|`/g, ''));
-                }
-                else
-                {
-                    pom = (window.epub_settings[parts[1]] == parts[0].replace(/'|"|`/g, ''));
-                }
+                    let cond_values = element.getAttribute(`data-${condition}`).split(' ');
 
-                if (pom == false)
-                {
-                    element.style.display = 'none';
+                    if(cond_values.includes(window.epub_settings[condition]) == false)
+                    {
+                        element.style.display = 'none';
+                    }
                 }
-                element.removeAttribute('epub-if');
-
             }
         }
+
 
         let higl_style_link = document.createElement("link");
         higl_style_link.href = "highlightjs/default.css";
@@ -1732,62 +1704,41 @@ function Get_base64(file)
 /**
  * Generates settings tab.
  *
- * @param {JSON} json_schema - File content loaded with Read_from_DB().
+ * @param {string} xml_settings - File content loaded with Read_from_DB().
  */
-function Generate_settings_page(json_schema)
+function Generate_settings_page(xml_settings)
 {
-    let properties = JSON.parse(json_schema.file_content).properties;
     let settings_page = document.getElementById('settings-div');
 
-    Object.keys(properties).forEach((key) =>
+    let parser = new DOMParser();
+    let xml_doc = parser.parseFromString(xml_settings.file_content,"text/xml");
+        let conditions = xml_doc.getElementsByTagName("user_profile")[0].children;
+    for(let condition of conditions)
     {
         let div = document.createElement('div');
         let label = document.createElement('label');
-        label.textContent = properties[key]['title'];
-        label.setAttribute('title', properties[key]['description']);
+        label.textContent = condition.getElementsByTagName('title')[0].textContent;
+        label.setAttribute('title', condition.getElementsByTagName('description')[0].textContent);
         div.appendChild(label);
+
 
         let inner_div = document.createElement('div');
 
-        if (properties[key]['enum'] != null || properties[key]['type'] === 'boolean')
-        {
-            let select = document.createElement('select');
-            select.name = key;
-            if (properties[key]['enum'] != null)
-            {
-                Object.values(properties[key]['enum']).forEach((value) =>
-                {
-                    let option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = value;
-                    select.appendChild(option);
-                });
-            }
-            else
-            {
-                let option_true = document.createElement('option');
-                option_true.value = "true";
-                option_true.textContent = "Yes";
-                select.appendChild(option_true);
-                let option_false = document.createElement('option');
-                option_false.value = "false";
-                option_false.textContent = "No";
-                select.appendChild(option_false);
-            }
+        let select = document.createElement('select');
+        select.name = condition.getElementsByTagName('name')[0].textContent;
 
-            inner_div.appendChild(select);
-        }
-        else if (properties[key]['type'] === 'string' || properties[key]['type'] === 'num')
+        for(let value of condition.getElementsByTagName('values')[0].children)
         {
-            let input = document.createElement('input');
-            input.name = key;
-            input.type = properties[key]['type'];
-            input.appendChild(input);
+            let option = document.createElement('option');
+            option.value = value.textContent;
+            option.textContent = value.textContent;
+            select.appendChild(option);
+            inner_div.appendChild(select);
         }
 
         div.appendChild(inner_div);
         settings_page.appendChild(div);
-    });
+    }
 
     let submit_div = document.createElement('div');
     let button = document.createElement('button');
