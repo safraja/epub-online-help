@@ -7,8 +7,6 @@ Copyright (c) 2020 Jakub Šafránek
 const EPUB_DEFAULT_FILE = ""; ///epub/epub30-spec.epub
 // Specifies, if app should (after CACHE TIME) check, if EPUB was not changed.
 const EPUB_CHECK_UPDATE = true;
-// Specifies, after how many seconds should app download file to check, if it was not changed.
-const EPUB_CACHE_TIME = 604800;
 
 window.db_name;
 window.db = {};
@@ -60,6 +58,8 @@ window.addEventListener('load', () =>
         {
             history.replaceState({"page": null}, null, `?file=${file_addres}`);
             Load_application();
+            document.getElementById('file-upload-div').style.display = 'none';
+            document.getElementById('epub-display').style.display = 'flex';
         }
         else
         {
@@ -210,7 +210,7 @@ function Load_application()
     }
     else    // No default file loaded.
     {
-        document.getElementById('file-upload-div').style.display = 'flex';
+        document.getElementById('file-upload-div').style.display = 'block';
         document.getElementById('epub-display').style.display = 'none';
     }
 }
@@ -274,7 +274,6 @@ function Renew_DB_content(db_existed, db_name)
                 resolve();
                 console.log("Renew_DB_content 77777777777777777777777777777777777 :", db_name);
             });
-            await Add_files_to_cache(db_name);
             resolve();
             console.log("Renew_DB_content asdasdsssssss :", db_name);
         }
@@ -614,8 +613,10 @@ function Load_UI(rootfile)
                 {
                     li = document.createElement('li');
                     let a = document.createElement('a');
-                    a.textContent = lang.getAttribute('xml:lang').toUpperCase();
-                    a.setAttribute('href', lang.getAttribute('href'));
+                    a.textContent = lang.getAttribute('hreflang').toUpperCase();
+                    let complete_href = location.protocol + '//' + location.hostname + location.pathname
+                        + '?file=' + lang.getAttribute('href');
+                    a.setAttribute('href', complete_href);
                     li.appendChild(a);
                     lang_list.appendChild(li);
                 }
@@ -647,7 +648,7 @@ function Load_UI(rootfile)
 /**
  * Finalizes loadin of user interface, then calls Load_side_menu().
  *
- * @param {JSON} rootfile_content - Rootfile loaded with Read_from_DB() function.
+ * @param {Object} rootfile_content - Rootfile loaded with Read_from_DB() function.
  * @param {Document} xml_doc - Parsed rootfile content.
  */
 function Finalize_load_UI(rootfile_content, xml_doc)
@@ -704,6 +705,23 @@ function Finalize_load_UI(rootfile_content, xml_doc)
                     document.getElementById("page-name").textContent = readed_page;
                     document.querySelector('#epub-display').srcdoc = result;
                     sessionStorage.setItem("cur_file", readed_page);
+
+                    let element;
+                    element = xml_doc.querySelector('item[properties="contact"]');
+                    let href_contact = element.getAttribute('href');
+                    document.getElementById('contact-tab').addEventListener('click', () =>
+                    {
+                        Change_page(href_contact, sessionStorage.getItem("rootfile_dir") +
+                            sessionStorage.getItem("rootfile_name"));
+                    });
+
+                    element = xml_doc.querySelector('item[properties="index"]');
+                    let href_index = element.getAttribute('href');
+                    document.getElementById('index-tab').addEventListener('click', () =>
+                    {
+                        Change_page(href_index, sessionStorage.getItem("rootfile_dir") +
+                            sessionStorage.getItem("rootfile_name"));
+                    });
 
                     Load_side_menu(rootfile_content);
                 });
@@ -936,7 +954,8 @@ function Generate_submenu(navigation, epub_file)
             {
                 span.addEventListener('click', () =>
                 {
-                    Change_page(li.children[0].getAttribute("href"), "cur_posittion", false, epub_file);
+                    Change_page(li.children[0].getAttribute("href"), "cur_posittion",
+                        false, epub_file);
                 });
                 span.setAttribute('data-href', li.children[0].getAttribute("href"));
                 span.setAttribute('data-file', epub_file);
@@ -999,7 +1018,7 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
         sec_files_par.unshift(window.db_name);
         search_param.push(`secondary_files=${sec_files_par.join(',')}`);
         sec_files_par.push(new_file);
-        window.secondary_epub_file = sec_files_par;
+        window.secondary_epub_files = sec_files_par;
 
         window.db_name = new_file;
 
@@ -1007,6 +1026,59 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
         {
             search_param.push(`hash=${pom.hash.substring(1)}`);
         }
+
+        Read_from_DB('META-INF/container.xml', new_file).then(
+            async (rootfile) =>
+            {
+                return new Promise((resolve, reject) =>
+                {
+                    let parser = new DOMParser();
+                    let xmlDoc = parser.parseFromString(rootfile.file_content, "text/xml");
+
+                    let rootfile =
+                        xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+
+                    let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
+                    let rootfile_dir = rootfile.replace(rootfile_name, "");
+                    sessionStorage.setItem("rootfile_dir", rootfile.replace(rootfile_name, ""));
+                    sessionStorage.setItem("rootfile_name", rootfile_name);
+
+
+                    resolve({"rootfile": rootfile, "rootfile_dir": rootfile_dir})
+                }).then(async function (rootfile_data)
+                {
+                    await Read_from_DB(rootfile_data.rootfile, window.secondary_epub_files[i]).then(
+                        async (rootfile_content) =>
+                        {
+                            let parser = new DOMParser();
+                            let xml_doc = parser.parseFromString(rootfile_content.file_content, "text/xml");
+
+
+
+                            let documents_el = xml_doc.querySelectorAll(`manifest item`);
+                            let document_types = {};
+
+                            for (let doc of documents_el)
+                            {
+                                document_types[`${sessionStorage.getItem("rootfile_dir")}${doc.getAttribute("href")}`] =
+                                    doc.getAttribute("media-type");
+                            }
+
+                            sessionStorage.setItem("document_types", JSON.stringify(document_types));
+
+                            let element = xml_doc.querySelector('item[properties="nav"]');
+
+                            if (element != null)
+                            {
+                                let href = element.getAttribute('href');
+                                sessionStorage.setItem('nav_dir', href.replace(href.substr(href.lastIndexOf("/") + 1), ''));
+                            }
+
+                        });
+
+                });
+            })
+
     }
     else
     {
@@ -1049,6 +1121,10 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
     else
     {
         selector += `']`;
+    }
+    if(new_file != "")
+    {
+        selector += `[data-file='${new_file}']`;
     }
 
     let menu_spans = document.querySelectorAll('#main-navigation .highlited');
@@ -1255,6 +1331,10 @@ function Find_and_write_search_results()
     let search_res = document.getElementById('search-results');
     search_res.textContent = "";
 
+    let h2 = document.createElement("h2");
+    h2.textContent = "Výsledky vyhledávání";
+    search_res.append(h2);
+
     Search_expression(expression).then((results) =>
     {
         results = results.sort(function (a, b)  // Order by priority.
@@ -1262,28 +1342,73 @@ function Find_and_write_search_results()
             return a.priority - b.priority;
         });
 
-        let ul = document.createElement("ul");
 
-        for (let result of results)
+        if(window.secondary_epub_files != null)
         {
-            let li = document.createElement("li");
-            let div = document.createElement("div");
-            let h2 = document.createElement("h2");
-            let info_div = document.createElement("div");
-
-            h2.textContent = result.title;
-            h2.addEventListener('click', () =>
+            for (let i = 0; i < window.secondary_epub_files.length; i++)
             {
-                Change_page(result.key, "", false, result.file);
-            });
-            div.appendChild(h2);
-            info_div.textContent = results.description;
-            div.appendChild(info_div);
-            li.appendChild(div);
-            ul.appendChild(li);
-        }
+                let h2 = document.createElement("h2");
+                h2.textContent = window.secondary_epub_files[i];
+                search_res.append(h2);
 
-        search_res.appendChild(ul);
+                let ul = document.createElement("ul");
+                ul.style.paddingLeft = "25px";
+
+                for (let result of results)
+                {
+                    if(window.secondary_epub_files[i] != result.file)
+                    {
+                        console.log("asdasdasdasd", window.secondary_epub_files[i], result.file)
+                        continue;
+                    }
+
+                    let li = document.createElement("li");
+                    let div = document.createElement("div");
+                    div.classList.add("search-result");
+                    div.addEventListener('click', () =>
+                    {
+                        Change_page(result.key, "", false, result.file);
+                    });
+                    let h3 = document.createElement("h3");
+                    let info_div = document.createElement("div");
+
+                    h3.textContent = result.title;
+                    div.appendChild(h3);
+                    info_div.textContent = result.description;
+                    div.appendChild(info_div);
+                    li.appendChild(div);
+                    ul.appendChild(li);
+                }
+
+                search_res.appendChild(ul);
+            }
+        }
+        else
+        {
+            let ul = document.createElement("ul");
+
+            for (let result of results)
+            {
+                let li = document.createElement("li");
+                let div = document.createElement("div");
+                div.classList.add("search-result");
+                div.addEventListener('click', () =>
+                {
+                    Change_page(result.key, "", false, result.file);
+                });
+                let h3 = document.createElement("h3");
+                let info_div = document.createElement("div");
+
+                h3.textContent = result.title;
+                div.appendChild(h3);
+                info_div.textContent = result.description;
+                div.appendChild(info_div);
+                li.appendChild(div);
+                ul.appendChild(li);
+            }
+
+            search_res.appendChild(ul);
+        }
     });
 }
 
@@ -1368,7 +1493,17 @@ async function Search_expression(expression)
         {
             await Read_from_DB(key, db_name).then((result) =>
             {
+                if (result == null)
+                {
+                    alert('Došlo k chybě při načtení souboru.');
+                }
+                if (db_name == "" || db_name == undefined)
+                {
+                    db_name = window.db_name;
+                }
+
                 let parser = new DOMParser();
+
                 let translated_doc = result.file_content.toLowerCase();
                 translated_doc = translated_doc.strtr(dictionary);
 
@@ -1398,7 +1533,7 @@ async function Search_expression(expression)
                     {
                         found_priority = 2;
                     }
-
+                    //console.log(translated_doc);
                     if ((found_priority === false) &&
                         (xml_doc.evaluate(`count(//*[contains(text(),'${words_to_search[i]}')])`,
                             xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
@@ -1409,7 +1544,8 @@ async function Search_expression(expression)
 
                 if (typeof found_priority !== "boolean")
                 {
-                    search_results.push(Generate_search_result(key, found_priority, xml_doc,
+                    let xml_doc_orig = parser.parseFromString(result.file_content, "text/xml");
+                    search_results.push(Generate_search_result(key, found_priority, xml_doc_orig,
                         db_name, ns_resolve));
                     return;
                 }
@@ -1438,6 +1574,7 @@ async function Search_expression(expression)
         {
             await Search_in_document(parsed_doc);
         }
+
 
         if (window.secondary_epub_files != null)
         {
@@ -1495,7 +1632,6 @@ async function Search_expression(expression)
 
                                     Object.keys(document_types).forEach((key) =>
                                     {
-                                        console.log("ssssss", document_types[key] == "application/xhtml+xml");
                                         if (document_types[key] == "application/xhtml+xml")
                                         {
                                             documents_to_parse.push(key);
@@ -1504,7 +1640,6 @@ async function Search_expression(expression)
 
                                     for (let parsed_doc of documents_to_parse)
                                     {
-                                        console.log("J=é===========ééééé");
                                         await Search_in_document(parsed_doc, window.secondary_epub_files[i]);
                                     }
 
@@ -1629,7 +1764,7 @@ function Save_to_DB(data, db_name = '')
  *
  * @param key - Key of readed database record.
  * @param {string} db_name - The name of the database from which should be readed. Set to main EPUB file name by default.
- * @returns {Promise<JSON>} - Data loaded drom database, null on failure.
+ * @returns {Promise<Object>} - Data loaded drom database, null on failure.
  */
 function Read_from_DB(key, db_name = "")
 {
@@ -1710,22 +1845,33 @@ function Generate_settings_page(xml_settings)
 {
     let settings_page = document.getElementById('settings-div');
 
+    let title = document.createElement('h2');
+    title.textContent = 'Nastavení';
+    settings_page.append(title);
+
     let parser = new DOMParser();
     let xml_doc = parser.parseFromString(xml_settings.file_content,"text/xml");
-        let conditions = xml_doc.getElementsByTagName("user_profile")[0].children;
+    let conditions = xml_doc.getElementsByTagName("user_profile")[0].children;
+
     for(let condition of conditions)
     {
         let div = document.createElement('div');
+        div.classList.add('settings-par');
+
+        let id = condition.getElementsByTagName('name')[0].textContent;
+
         let label = document.createElement('label');
         label.textContent = condition.getElementsByTagName('title')[0].textContent;
         label.setAttribute('title', condition.getElementsByTagName('description')[0].textContent);
+        label.setAttribute('for', id);
         div.appendChild(label);
 
 
         let inner_div = document.createElement('div');
 
         let select = document.createElement('select');
-        select.name = condition.getElementsByTagName('name')[0].textContent;
+        select.name = id;
+        select.id = id;
 
         for(let value of condition.getElementsByTagName('values')[0].children)
         {
@@ -1741,6 +1887,7 @@ function Generate_settings_page(xml_settings)
     }
 
     let submit_div = document.createElement('div');
+    submit_div.classList.add('submit');
     let button = document.createElement('button');
     button.textContent = "Uložit nastavení";
     button.addEventListener('click', Genrate_settings);
@@ -1757,24 +1904,13 @@ function Genrate_settings()
     let setting = {};
     for (let element of inputs)
     {
-        switch (element.value)
-        {
-            case "true":
-                setting[element.getAttribute('name')] = true;
-                break;
-
-            case  "false":
-                setting[element.getAttribute('name')] = false;
-                break;
-
-            default:
-                setting[element.getAttribute('name')] = element.value;
-                break;
-        }
+        setting[element.getAttribute('name')] = element.value;
     }
 
     window.epub_settings = setting;
     Save_file_to_DB('USER_SETTINGS', JSON.stringify(setting));
+    alert('Nastavení uloženo.');
+    Change_page(sessionStorage.getItem('cur_file'), '');
 }
 
 /**
@@ -1809,10 +1945,12 @@ function Display_tab(name)
 
 /**
  * strtr() for JavaScript
- * Translate characters or replace substrings
+ * Translate characters or replace substrings.
+ *
+ * (Edit: Changed to work globally - Jakub Šafránek)
  *
  * @author Dmitry Sheiko
- * @version strtr.js, v 1.0.1
+ * @version strtr.js, v 1.0.1, edited
  * @license MIT
  * @copyright (c) Dmitry Sheiko http://dsheiko.com
  **/
@@ -1829,8 +1967,8 @@ String.prototype.strtr = function (dic)
             })),
 
         tokenizedStr = tokens.reduce((carry, entry) =>
-            carry.replace(entry.key, entry.token), str);
+            carry.replace(new RegExp(entry.key, 'g'), entry.token), str);
 
     return tokens.reduce((carry, entry) =>
-        carry.replace(entry.token, entry.val), tokenizedStr);
+        carry.replace(new RegExp(entry.token, 'g'), entry.val), tokenizedStr);
 };

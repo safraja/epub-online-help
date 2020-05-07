@@ -64,18 +64,17 @@
             <div id="search-results" style="width: 100%;"></div>
         </div>
         <div id="file-upload-div" class="display-div" data-display="none">
-            <h2>Načtení lokálního souboru</h2>
+            <h2>Výběr EPUB souboru</h2>
+            <h3>Nahrát lokální soubor z PC</h3>
             <div>
-                Nahrajte soubor nebo vložte adresu.
+                <input id="file-upload-input" type="file" value="Vyberte soubor">
             </div>
-            <div>
-                <input id="file-upload-input" type="file" value="Vložte soubor">
-            </div>
+            <h3>Stáhnout EPUB přes URL</h3>
             <div>
                 <input id="file-addres-input" type="url" placeholder="Adresa EPUBu">
             </div>
             <div>
-                <button id="confirm-file-addres-load">Načíst EPUB</button>
+                <button id="confirm-file-addres-load">Stáhnout soubor</button>
             </div>
         </div>
         <div id="settings-div" class="display-div" data-display="none"></div>

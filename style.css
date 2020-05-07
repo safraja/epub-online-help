@@ -185,8 +185,57 @@ ul li span.highlited
 #search-div
 {
     height: 100%;
+    padding: 30px;
     background-color: white;
     overflow: auto;
+}
+#search-div ul
+{
+    padding-left: 0;
+}
+.search-result
+{
+    padding: 10px;
+    cursor: pointer;
+}
+.search-result:hover
+{
+    background: #d9d9d9;
+}
+.search-result h3
+{
+    margin: 5px 0;
+}
+.search-result:hover h3
+{
+    text-decoration: underline;
+}
+#settings-div
+{
+    align-content: start;
+    padding: 30px;
+    flex-wrap: wrap;
+}
+#settings-div h2,
+#search-results h2
+{
+    width: 100%;
+    padding-left: 10px;
+    margin-bottom: 10px;
+}
+.settings-par
+{
+    padding: 10px;
+}
+.settings-par > div
+{
+    padding-top: 5px;
+}
+#settings-div .submit
+{
+    width: 100%;
+    margin-top: 35px;
+    padding: 0 10px;
 }
 #file-upload-div
 {
@@ -202,4 +251,8 @@ ul li span.highlited
 [data-display='flex']
 {
     display: flex;
+}
+#confirm-file-addres-load
+{
+    margin-top: 20px;
 }
