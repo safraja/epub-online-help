@@ -188,6 +188,7 @@ ul li span.highlited
     padding: 30px;
     background-color: white;
     overflow: auto;
+    box-sizing: border-box;
 }
 #search-div ul
 {

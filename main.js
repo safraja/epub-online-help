@@ -4,7 +4,7 @@ Copyright (c) 2020 Jakub Šafránek
 
 // Default location of a file to open, if it is not specified in URL. If left empty,
 // app will ask user to upload local file or insert URL address of EPUB file.
-const EPUB_DEFAULT_FILE = ""; ///epub/epub30-spec.epub
+const EPUB_DEFAULT_FILE = ""; // example: https://akiba.cz/epub/test_epub.epub
 // Specifies, if app should (after CACHE TIME) check, if EPUB was not changed.
 const EPUB_CHECK_UPDATE = true;
 
@@ -16,7 +16,6 @@ window.readed_page;
 window.page_hash;
 window.epub_settings = {};
 
-console.log("asdasasdasdasdasdasdadsdsa")
 
 if (!window.indexedDB)
 {
@@ -53,10 +52,28 @@ window.addEventListener('load', () =>
     document.getElementById('confirm-file-addres-load').addEventListener('click', (event) =>
     {
         let file_addres = document.getElementById('file-addres-input').value;
-        console.log("asdasasdasdasdasdasdadsdsa")
+
         if (file_addres != "")
         {
-            history.replaceState({"page": null}, null, `?file=${file_addres}`);
+            let sec_files = [];
+            let sec_file_el = document.querySelectorAll('[data-name="sec-file-addres-input"]');
+            for(let element of sec_file_el)
+            {
+                if(element.value !== "")
+                {
+                    sec_files.push(element.value);
+                }
+            }
+            if(sec_files.length === 0)
+            {
+                history.replaceState({"page": null}, null, `?file=${file_addres}`);
+            }
+            else
+            {
+                history.replaceState({"page": null}, null,
+                    `?file=${file_addres}&secondary_files=${sec_files.join(',')}`);
+            }
+
             Load_application();
             document.getElementById('file-upload-div').style.display = 'none';
             document.getElementById('epub-display').style.display = 'flex';
@@ -82,6 +99,16 @@ window.addEventListener('load', () =>
     {
         Display_tab('settings-div');
     });
+
+    document.getElementById('add-new-addres-button').addEventListener('click', (event) =>
+    {
+        let input = document.createElement('input');
+        input.placeholder = 'Adresa sekundárního souboru';
+        input.setAttribute('data-name', 'sec-file-addres-input')
+        input.type = 'url';
+
+        event.target.parentNode.insertBefore(input, event.target);
+    });
 });
 
 window.addEventListener('popstate', function (event)
@@ -96,7 +123,7 @@ window.addEventListener('popstate', function (event)
 function Load_application()
 {
     const url_params = new URL(location.href).searchParams;
-    console.log("asdasasdasdasdasdasdadsdsa")
+
     epub_file = url_params.get('file');
     secondary_epub_files = url_params.get('secondary_files');
     readed_page = url_params.get('readed_page');
@@ -137,25 +164,19 @@ function Load_application()
             databeses_to_load.push(Open_DB())
         }
 
-        console.log('databeses_to_load' + databeses_to_load);
-
         Promise.all(databeses_to_load).then((results) =>
         {
-            console.log("databeses_to_load:", databeses_to_load);
             let secondary_epubs = [];
 
             for (let i = 1; i < results.length; i++)    // Start from 1 to ignore main EPUB file.
             {
-                console.log("window.secondary_epub_files[i]:", window.secondary_epub_files[i]);
                 secondary_epubs.push(Renew_DB_content(results[i], window.secondary_epub_files[i]));
             }
-            console.log("secondary_epubs:", secondary_epubs);
+
             Promise.all(secondary_epubs).then(() =>
             {
-                console.log("secondary_epubs2 :", secondary_epubs);
                 if ((results[0] == true) && (EPUB_CHECK_UPDATE == true))
                 {
-                    console.log(`db_existed (${db_name})`, results[0]);
                     Read_from_DB('HTTP_HEADERS').then((result) =>
                     {
                         let old_headers = JSON.parse(result.file_content);
@@ -178,10 +199,10 @@ function Load_application()
                                         return new Promise((resolve, reject) =>
                                         {
                                             let parser = new DOMParser();
-                                            let xmlDoc = parser.parseFromString(result.file_content, "text/xml");
+                                            let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
                                             let rootfile =
-                                                xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+                                                xml_doc.querySelector("container rootfiles rootfile").getAttribute("full-path");
 
                                             let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
                                             sessionStorage.setItem("rootfile_dir", rootfile.replace(rootfile_name, ""));
@@ -190,7 +211,6 @@ function Load_application()
                                             resolve(rootfile)
                                         }).then(function (rootfile)
                                         {
-                                            console.log('Načteno z historie.');
                                             Load_UI(rootfile);
                                             Add_listeners();
                                         });
@@ -227,13 +247,10 @@ function Renew_DB_content(db_existed, db_name)
 {
     return new Promise(async (resolve, reject) =>
     {
-        console.log(`db_existed (${db_name})`, db_existed);
-
         if ((db_existed == true) && (EPUB_CHECK_UPDATE == true))
         {
             Read_from_DB('HTTP_HEADERS', db_name).then((result) =>
             {
-                //console.log("Renew_DB_content2 :" , result);
                 let old_headers = JSON.parse(result.file_content);
 
                 let http_req = new XMLHttpRequest();
@@ -242,16 +259,12 @@ function Renew_DB_content(db_existed, db_name)
                 {
                     if (this.readyState == this.DONE)
                     {
-                        console.log("Renew_DB_content3 :", this);
-
                         if (new Date(this.getResponseHeader('last-modified')) > new Date(old_headers['last-modified']))
                         {   // If the file on server were changed, clear DB and download process file from server.
                             Clear_data_from_DB();
-                            console.log("Renew_DB_content45 :", this);
+
                             Process_epub(db_name, false).then(() =>
                             {
-                                console.log("Renew_DB_content5 :", this);
-
                                 resolve();
                             });
                         }
@@ -267,15 +280,11 @@ function Renew_DB_content(db_existed, db_name)
         }
         else
         {
-            console.log("Renew_DB_content6 :", db_name);
             await Process_epub(db_name, false).then(() =>
             {
-                console.log("Renew_DB_content 444444444444444 :", db_name);
                 resolve();
-                console.log("Renew_DB_content 77777777777777777777777777777777777 :", db_name);
             });
             resolve();
-            console.log("Renew_DB_content asdasdsssssss :", db_name);
         }
     });
 }
@@ -289,7 +298,6 @@ function Renew_DB_content(db_existed, db_name)
  */
 function Process_epub(epub_file = "", add_listeners = true)
 {
-    console.log("asdasasdasdasdasdasdadsdsa")
     return new Promise((resolve, reject) =>
     {
         if (epub_file == "")
@@ -307,7 +315,7 @@ function Process_epub(epub_file = "", add_listeners = true)
                     {
                         headers[headers_data[0]] = headers_data[1];
                     }
-                    console.log("Save_file_to_DB(\"HTTP_HEADERS\")", epub_file);
+
                     Save_file_to_DB("HTTP_HEADERS", JSON.stringify(headers), epub_file);
                     return Promise.resolve(response.blob());
                 }
@@ -322,29 +330,24 @@ function Process_epub(epub_file = "", add_listeners = true)
                 return new Promise(async (resolve, reject) =>
                 {
                     await Process_inner_files(zip, epub_file);
-                    console.log("ggggggggsssssssssssssssssggggggggggggggg");
                     resolve();
                 });
             })
             .then(function ()
             {
-                console.log("ggggggggggggggggggggggg", add_listeners);
                 if (add_listeners == false)
                 {
-                    console.log("add_listenersssssssssfalse", add_listeners);
                     resolve();
                 }
             })
             .catch((error) =>
             {
-                console.error('Error:', error);
                 alert('Je nám líto, soubor se nepodařilo stáhnout. Je pravděpodobně příliš velký, nebo' +
                     ' server neumožňuje jeho stažení přes Javasript.');
             });
 
         if (add_listeners == true)
         {
-            console.log("asdads");
             Add_listeners();
         }
     });
@@ -359,16 +362,15 @@ function Process_epub(epub_file = "", add_listeners = true)
  */
 async function Process_inner_files(zip, db_name = "")
 {
-    console.log("process inner db_name", db_name);
     await zip.file(`META-INF/container.xml`).async("string").then(function (content)
     {
         return new Promise((resolve, reject) =>
         {
             let parser = new DOMParser();
-            let xmlDoc = parser.parseFromString(content, "text/xml");
+            let xml_doc = parser.parseFromString(content, "text/xml");
 
             let rootfile =
-                xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+                xml_doc.querySelector("container rootfiles rootfile").getAttribute("full-path");
 
             let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
             sessionStorage.setItem("rootfile_dir", rootfile.replace(rootfile_name, ""));
@@ -384,13 +386,11 @@ async function Process_inner_files(zip, db_name = "")
                 await Save_files_from_zip(zip, db_name);
                 resolve(rootfile);
             });
-            console.log("asdasasdasdasdasdasdadsdsa")
         })
         .then(function (rootfile)
         {
             if (db_name == "" || db_name == window.db_name)  // Only if processed file is the main EPUB.
             {
-                console.log("asdasdasdasdasdasdasdasdads");
                 Load_UI(rootfile);
             }
         });
@@ -445,18 +445,15 @@ function Add_listeners()
         let loaded_page_name = loaded_page.textContent;
 
         Read_from_DB(sessionStorage.getItem("rootfile_dir") +
-            sessionStorage.getItem("rootfile_name")).then((result) =>
+            sessionStorage.getItem("rootfile_name"), window.db_name).then((result) =>
         {
             let parser = new DOMParser();
-            let xmlDoc = parser.parseFromString(result.file_content, "text/xml");
+            let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
             loaded_page_name = loaded_page_name.replace(sessionStorage.getItem("rootfile_dir"), "");
-            let lp_id = xmlDoc.querySelector(`[href='${loaded_page_name}']`).getAttribute("id");
-            console.log(lp_id);
-            let np_id = xmlDoc.querySelector(`[idref='${lp_id}']`).nextElementSibling.getAttribute("idref");
-            console.log(np_id);
-            let np_href = xmlDoc.getElementById(np_id).getAttribute("href");
-            console.log(np_href);
+            let lp_id = xml_doc.querySelector(`[href='${loaded_page_name}']`).getAttribute("id");
+            let np_id = xml_doc.querySelector(`[idref='${lp_id}']`).nextElementSibling.getAttribute("idref");
+            let np_href = xml_doc.getElementById(np_id).getAttribute("href");
 
             loaded_page.textContent = sessionStorage.getItem("rootfile_dir") + np_href;
 
@@ -471,18 +468,15 @@ function Add_listeners()
         let loaded_page_name = loaded_page.textContent;
 
         Read_from_DB(sessionStorage.getItem("rootfile_dir") +
-            sessionStorage.getItem("rootfile_name")).then((result) =>
+            sessionStorage.getItem("rootfile_name"), window.db_name).then((result) =>
         {
             let parser = new DOMParser();
-            let xmlDoc = parser.parseFromString(result.file_content, "text/xml");
+            let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
             loaded_page_name = loaded_page_name.replace(sessionStorage.getItem("rootfile_dir"), "");
-            let lp_id = xmlDoc.querySelector(`[href='${loaded_page_name}']`).getAttribute("id");
-            console.log(lp_id);
-            let pp_id = xmlDoc.querySelector(`[idref='${lp_id}']`).previousElementSibling.getAttribute("idref");
-            console.log(pp_id);
-            let pp_href = xmlDoc.getElementById(pp_id).getAttribute("href");
-            console.log(pp_href);
+            let lp_id = xml_doc.querySelector(`[href='${loaded_page_name}']`).getAttribute("id");
+            let pp_id = xml_doc.querySelector(`[idref='${lp_id}']`).previousElementSibling.getAttribute("idref");
+            let pp_href = xml_doc.getElementById(pp_id).getAttribute("href");
 
             loaded_page.textContent = sessionStorage.getItem("rootfile_dir") + pp_href;
 
@@ -639,6 +633,7 @@ function Load_UI(rootfile)
             }
             else
             {
+                document.getElementById('settings-tab').style.display = 'none';
                 Finalize_load_UI(rootfile_content, xml_doc);
             }
         });
@@ -662,18 +657,35 @@ function Finalize_load_UI(rootfile_content, xml_doc)
 
         let element;
         element = xml_doc.querySelector('item[properties="contact"]');
-        let href_contact = element.getAttribute('href');
-        document.getElementById('contact-tab').addEventListener('click', () =>
+        if(element != null)
         {
-            Change_page(href_contact, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
-        });
+            let href_contact = element.getAttribute('href');
+            document.getElementById('contact-tab').addEventListener('click', () =>
+            {
+                Change_page(href_contact, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
+            });
+        }
+        else
+        {
+            document.getElementById('contact-tab').style.display = 'none';
+        }
 
         element = xml_doc.querySelector('item[properties="index"]');
-        let href_index = element.getAttribute('href');
-        document.getElementById('index-tab').addEventListener('click', () =>
+        if(element != null)
         {
-            Change_page(href_index, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
-        });
+            let href_index = element.getAttribute('href');
+            document.getElementById('index-tab').addEventListener('click', () =>
+            {
+                Change_page(href_index, sessionStorage.getItem("rootfile_dir") + sessionStorage.getItem("rootfile_name"));
+            });
+        }
+        else
+        {
+            document.getElementById('index-tab').style.display = 'none';
+        }
+
+
+
 
         Read_from_DB(`${sessionStorage.getItem("rootfile_dir")}${first_page_href}`)
             .then((result) =>
@@ -708,20 +720,35 @@ function Finalize_load_UI(rootfile_content, xml_doc)
 
                     let element;
                     element = xml_doc.querySelector('item[properties="contact"]');
-                    let href_contact = element.getAttribute('href');
-                    document.getElementById('contact-tab').addEventListener('click', () =>
+                    if(element != null)
                     {
-                        Change_page(href_contact, sessionStorage.getItem("rootfile_dir") +
-                            sessionStorage.getItem("rootfile_name"));
-                    });
+                        let href_contact = element.getAttribute('href');
+                        document.getElementById('contact-tab').addEventListener('click', () =>
+                        {
+                            Change_page(href_contact, sessionStorage.getItem("rootfile_dir") +
+                                sessionStorage.getItem("rootfile_name"));
+                        });
+                    }
+                    else
+                    {
+                        document.getElementById('contact-tab').style.display = 'none';
+                    }
 
                     element = xml_doc.querySelector('item[properties="index"]');
-                    let href_index = element.getAttribute('href');
-                    document.getElementById('index-tab').addEventListener('click', () =>
+                    if(element != null)
                     {
-                        Change_page(href_index, sessionStorage.getItem("rootfile_dir") +
-                            sessionStorage.getItem("rootfile_name"));
-                    });
+                        let href_index = element.getAttribute('href');
+                        document.getElementById('index-tab').addEventListener('click', () =>
+                        {
+                            Change_page(href_index, sessionStorage.getItem("rootfile_dir") +
+                                sessionStorage.getItem("rootfile_name"));
+                        });
+                    }
+                    else
+                    {
+                        document.getElementById('index-tab').style.display = 'none';
+                    }
+
 
                     Load_side_menu(rootfile_content);
                 });
@@ -762,7 +789,6 @@ function Load_side_menu(rootfile_data)
 
             if (window.secondary_epub_files != null)
             {
-                console.log("window.secondary_epub_files", window.secondary_epub_files);
                 for (let i = 1; i < window.secondary_epub_files.length; i++)
                 {
                     await Read_from_DB('META-INF/container.xml', window.secondary_epub_files[i]).then(
@@ -770,17 +796,14 @@ function Load_side_menu(rootfile_data)
                         {
                             return new Promise((resolve, reject) =>
                             {
-                                console.log("Read_from_DB", result);
                                 let parser = new DOMParser();
-                                let xmlDoc = parser.parseFromString(result.file_content, "text/xml");
+                                let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
                                 let rootfile =
-                                    xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+                                    xml_doc.querySelector("container rootfiles rootfile").getAttribute("full-path");
 
                                 let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
                                 let rootfile_dir = rootfile.replace(rootfile_name, "");
-
-                                console.log("root", rootfile);
 
                                 resolve({"rootfile": rootfile, "rootfile_dir": rootfile_dir})
                             }).then(function (rootfile_data)
@@ -788,8 +811,6 @@ function Load_side_menu(rootfile_data)
                                 Read_from_DB(rootfile_data.rootfile, window.secondary_epub_files[i]).then(
                                     async (rootfile_content) =>
                                     {
-                                        console.log("sec", window.secondary_epub_files[i]);
-                                        console.log("rootfile_content");
                                         let parser = new DOMParser();
                                         let xml_doc = parser.parseFromString(rootfile_content.file_content, "text/xml");
                                         let element = xml_doc.querySelector('item[properties="nav"]');
@@ -804,12 +825,10 @@ function Load_side_menu(rootfile_data)
 
                                             pom = new URL(href, pom);
                                             href = pom.pathname.substring(1);
-                                            console.log("href", href);
 
                                             await Read_from_DB(href, window.secondary_epub_files[i]).then(async (result) =>
                                             {
                                                 let parser = new DOMParser();
-                                                console.log("window.secondary_epub_files[i]", window.secondary_epub_files[i])
                                                 let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
                                                 let original_nav = xml_doc.querySelector('nav[*|type="toc"] ol');
@@ -1015,9 +1034,9 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
 
         search_param.push(`readed_page=${new_page}`);
 
-        sec_files_par.unshift(window.db_name);
+        sec_files_par.push(window.db_name);
         search_param.push(`secondary_files=${sec_files_par.join(',')}`);
-        sec_files_par.push(new_file);
+        sec_files_par.unshift(new_file);
         window.secondary_epub_files = sec_files_par;
 
         window.db_name = new_file;
@@ -1028,15 +1047,16 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
         }
 
         Read_from_DB('META-INF/container.xml', new_file).then(
-            async (rootfile) =>
+            async (rootfile_doc) =>
             {
+                let parser = new DOMParser();
+                let xml_doc = parser.parseFromString(rootfile_doc.file_content, "text/xml");
+
                 return new Promise((resolve, reject) =>
                 {
-                    let parser = new DOMParser();
-                    let xmlDoc = parser.parseFromString(rootfile.file_content, "text/xml");
 
                     let rootfile =
-                        xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+                        xml_doc.querySelector("container rootfiles rootfile").getAttribute("full-path");
 
                     let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
                     let rootfile_dir = rootfile.replace(rootfile_name, "");
@@ -1047,13 +1067,11 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
                     resolve({"rootfile": rootfile, "rootfile_dir": rootfile_dir})
                 }).then(async function (rootfile_data)
                 {
-                    await Read_from_DB(rootfile_data.rootfile, window.secondary_epub_files[i]).then(
+                    await Read_from_DB(rootfile_data.rootfile, window.db_name).then(
                         async (rootfile_content) =>
                         {
                             let parser = new DOMParser();
                             let xml_doc = parser.parseFromString(rootfile_content.file_content, "text/xml");
-
-
 
                             let documents_el = xml_doc.querySelectorAll(`manifest item`);
                             let document_types = {};
@@ -1122,10 +1140,7 @@ function Change_page(new_page, doc_path = "cur_posittion", from_history = false,
     {
         selector += `']`;
     }
-    if(new_file != "")
-    {
-        selector += `[data-file='${new_file}']`;
-    }
+    selector += `[data-file='${window.db_name}']`;
 
     let menu_spans = document.querySelectorAll('#main-navigation .highlited');
     for (let menu_span of menu_spans)
@@ -1252,7 +1267,6 @@ function Adjust_content(html)
                 changed_string = cur_el.getAttribute("src").replace("../", "");    //  TO DO
                 changed_string = changed_string.replace("./", "");
 
-                console.log(`${sessionStorage.getItem("rootfile_dir")}${changed_string}`);
                 await Read_from_DB(`${sessionStorage.getItem("rootfile_dir")}${changed_string}`).then((result) =>
                 {
                     cur_el.setAttribute("src", `data:audio/*;base64,${result.file_content}`);
@@ -1281,7 +1295,7 @@ function Adjust_content(html)
             {
                 changed_string = href.replace("../", "");    //  TO DO
                 changed_string = changed_string.replace("./", "");
-                console.log("asdad " + sessionStorage.getItem(changed_string));
+
                 cur_el.removeAttribute("xlink:href");
                 await Read_from_DB(`${changed_string}`).then((result) =>
                 {
@@ -1358,7 +1372,6 @@ function Find_and_write_search_results()
                 {
                     if(window.secondary_epub_files[i] != result.file)
                     {
-                        console.log("asdasdasdasd", window.secondary_epub_files[i], result.file)
                         continue;
                     }
 
@@ -1485,9 +1498,7 @@ async function Search_expression(expression)
 
         expression = expression.strtr(dictionary);
 
-        console.log("expression", expression)
         let words_to_search = expression.split(' ');
-        console.log("words_to_search", words_to_search);
 
         async function Search_in_document(key, db_name)
         {
@@ -1533,7 +1544,7 @@ async function Search_expression(expression)
                     {
                         found_priority = 2;
                     }
-                    //console.log(translated_doc);
+
                     if ((found_priority === false) &&
                         (xml_doc.evaluate(`count(//*[contains(text(),'${words_to_search[i]}')])`,
                             xml_doc, ns_resolve, XPathResult.NUMBER_TYPE, null).numberValue > 0))
@@ -1578,7 +1589,6 @@ async function Search_expression(expression)
 
         if (window.secondary_epub_files != null)
         {
-            console.log("window.seconda_search", window.secondary_epub_files);
             for (let i = 1; i < window.secondary_epub_files.length; i++)
             {
                 await Read_from_DB('META-INF/container.xml', window.secondary_epub_files[i]).then(
@@ -1586,17 +1596,14 @@ async function Search_expression(expression)
                     {
                         return new Promise((resolve, reject) =>
                         {
-                            console.log("searchRead_from_DB", result);
                             let parser = new DOMParser();
-                            let xmlDoc = parser.parseFromString(result.file_content, "text/xml");
+                            let xml_doc = parser.parseFromString(result.file_content, "text/xml");
 
                             let rootfile =
-                                xmlDoc.querySelector("container rootfiles rootfile").getAttribute("full-path");
+                                xml_doc.querySelector("container rootfiles rootfile").getAttribute("full-path");
 
                             let rootfile_name = rootfile.substring(rootfile.lastIndexOf("/") + 1);
                             let rootfile_dir = rootfile.replace(rootfile_name, "");
-
-                            console.log("root", rootfile);
 
                             resolve({"rootfile": rootfile, "rootfile_dir": rootfile_dir})
                         }).then(async function (rootfile_data)
@@ -1604,11 +1611,8 @@ async function Search_expression(expression)
                             await Read_from_DB(rootfile_data.rootfile, window.secondary_epub_files[i]).then(
                                 async (rootfile_content) =>
                                 {
-                                    console.log("sec", window.secondary_epub_files[i]);
-                                    console.log("rootfile_content");
-
                                     let parser = new DOMParser();
-                                    console.log("windowsss.secondary_epub_files[i]", window.secondary_epub_files[i])
+
                                     let xml_doc = parser.parseFromString(rootfile_content.file_content, "text/xml");
 
                                     let documents_el = xml_doc.querySelectorAll(`manifest item`);
@@ -1649,7 +1653,6 @@ async function Search_expression(expression)
                     })
             }
         }
-        console.log("end search_results", search_results);
         resolve(search_results);
     });
 }
@@ -1683,7 +1686,6 @@ function Open_DB(db_name = "")
 {
     return new Promise(async (resolve, reject) =>
     {
-        console.log("Openning db " + db_name);
         if (db_name == "")
         {
             db_name = window.db_name;
@@ -1695,7 +1697,6 @@ function Open_DB(db_name = "")
         request.onsuccess = async function (evt)
         {
             db[db_name] = request.result;
-            console.log("Open success: " + db[db_name]);
             resolve(existed)
         };
 
@@ -1706,7 +1707,6 @@ function Open_DB(db_name = "")
 
         request.onupgradeneeded = function (evt)
         {
-            console.log("openDb.onupgradeneeded");
             existed = false;
             let store = evt.currentTarget.result.createObjectStore('files', {keyPath: 'file_name'});
             try
@@ -1813,7 +1813,7 @@ function Clear_data_from_DB(db_name = "")
 
     request.onsuccess = function (event)
     {
-        console.log("Data smazány.");
+        console.log("Data smazána.");
     }
 }
 
